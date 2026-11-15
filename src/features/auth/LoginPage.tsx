@@ -1,4 +1,4 @@
-// [FE] Pantalla 1 · Ingreso: correo y contraseña, Google, rastreo por guía y accesos a cuenta/recuperación
+// [FE] Pantalla 1 · Ingreso: correo y contraseña, rastreo por guía y accesos a cuenta/recuperación
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,7 +17,7 @@ const loginSchema = z.object({
 type LoginValores = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { session, perfil, cargando, error: errorSesion, iniciarSesion, iniciarConGoogle } = useAuth();
+  const { session, perfil, cargando, error: errorSesion, iniciarSesion } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const destino = (location.state as { from?: string } | null)?.from;
@@ -47,15 +47,6 @@ export default function LoginPage() {
       setErrorForm(e instanceof Error ? e.message : 'No se pudo iniciar sesión.');
     } finally {
       setEnviando(false);
-    }
-  };
-
-  const onGoogle = async () => {
-    setErrorForm(null);
-    try {
-      await iniciarConGoogle();
-    } catch (e) {
-      setErrorForm(e instanceof Error ? e.message : 'No se pudo iniciar con Google.');
     }
   };
 
@@ -94,15 +85,6 @@ export default function LoginPage() {
         </Boton>
       </form>
 
-      <div className="flex items-center gap-3 text-xs font-semibold text-ink-2">
-        <span className="h-px flex-1 bg-line" />
-        o
-        <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <Boton variante="secundaria" className="w-full" onClick={onGoogle} disabled={enviando}>
-        Continuar con Google
-      </Boton>
       <Boton variante="fantasma" className="w-full" onClick={() => navigate('/cliente/rastreo')}>
         Rastrear con número de guía
       </Boton>
