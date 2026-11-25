@@ -3,9 +3,10 @@
 // En pantallas pequeñas el menú pasa arriba.
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Boton } from '@/components/ui';
+import { Alerta, Boton } from '@/components/ui';
 import { Logo } from '@/components/Logo';
 import { useAuth } from '@/hooks/useAuth';
+import { useMfa } from '@/hooks/useMfa';
 import { useRecinto } from '@/hooks/useRecinto';
 import { ROL_LABEL } from '@/theme/tokens';
 
@@ -43,6 +44,7 @@ const SEC_SUPER: Seccion = {
   items: [
     { to: '/superadmin/recintos', label: 'Recintos' },
     { to: '/superadmin/usuarios', label: 'Usuarios del sistema' },
+    { to: '/superadmin/auditoria', label: 'Auditoría' },
   ],
 };
 const SEC_CLIENTE: Seccion = {
@@ -104,6 +106,10 @@ export function LayoutEscritorio({ titulo, subtitulo, children }: { titulo: stri
   const { perfil, cerrarSesion } = useAuth();
   const navigate = useNavigate();
   const secciones = perfil ? (SECCIONES_POR_ROL[perfil.rol] ?? []) : [];
+  const mfa = useMfa();
+  // Aviso solo para cuentas con permisos de administración y sin segundo factor
+  const sugerirMfa =
+    (perfil?.rol === 'admin' || perfil?.rol === 'superadmin') && !mfa.cargando && mfa.verificados.length === 0;
 
   const salir = async () => {
     await cerrarSesion();
@@ -141,7 +147,10 @@ export function LayoutEscritorio({ titulo, subtitulo, children }: { titulo: stri
         <div className="space-y-1 border-t border-line p-4">
           <p className="truncate text-sm font-bold text-ink">{perfil?.nombres}</p>
           <p className="text-xs text-ink-2">{perfil ? ROL_LABEL[perfil.rol] : ''}</p>
-          <Boton variante="secundaria" className="mt-3 w-full" onClick={salir}>
+          <NavLink to="/seguridad" className="mt-2 inline-flex min-h-[44px] items-center text-sm font-bold text-brand underline-offset-4 hover:underline">
+            Seguridad de la cuenta
+          </NavLink>
+          <Boton variante="secundaria" className="mt-1 w-full" onClick={salir}>
             Cerrar sesión
           </Boton>
         </div>
@@ -174,13 +183,33 @@ export function LayoutEscritorio({ titulo, subtitulo, children }: { titulo: stri
                   {item.label}
                 </NavLink>
               ))}
+            <NavLink
+              to="/seguridad"
+              className={({ isActive }) =>
+                `inline-flex min-h-[44px] shrink-0 items-center rounded-full px-4 text-sm font-bold ${isActive ? 'bg-brand text-white' : 'border border-line text-ink'}`
+              }
+            >
+              Seguridad
+            </NavLink>
           </nav>
         </div>
         <header className="bg-brand px-6 py-6 text-white">
           <h1 className="text-2xl font-extrabold">{titulo}</h1>
           {subtitulo ? <p className="mt-1 text-sm text-white">{subtitulo}</p> : null}
         </header>
-        <main className="flex-1 space-y-4 p-4 md:p-8">{children}</main>
+        <main className="flex-1 space-y-4 p-4 md:p-8">
+          {/* Hallazgo 10: recordatorio no bloqueante. La exigencia real de aal2 la aplica RutaProtegida. */}
+          {sugerirMfa ? (
+            <Alerta tipo="info">
+              Tu cuenta tiene permisos de administración y aún no usa verificación en dos pasos.{' '}
+              <NavLink to="/seguridad" className="font-bold text-brand underline underline-offset-4">
+                Actívala ahora
+              </NavLink>
+              .
+            </Alerta>
+          ) : null}
+          {children}
+        </main>
       </div>
     </div>
   );

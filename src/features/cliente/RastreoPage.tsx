@@ -10,10 +10,10 @@ import { Alerta, Boton, ChipEstado, Cargando, ErrorMsg, Tarjeta, Vacio } from '@
 import { MapaRastreo } from '@/components/MapaRastreo';
 import { useRastrearGuia } from '@/hooks/useCliente';
 import { useCanalGuia, useUbicacionEnVivo } from '@/hooks/useRastreo';
-import { fechaSchema, filtrarGuia, hoyISO, numeroGuiaSchema } from '@/lib/validacion';
+import { busquedaRastreoSchema, filtrarGuia, hoyISO } from '@/lib/validacion';
 import { formatearFechaHora } from '@/lib/formato';
 
-const rastreoSchema = z.object({ numero: numeroGuiaSchema, fecha: fechaSchema });
+const rastreoSchema = busquedaRastreoSchema;
 type RastreoValores = z.infer<typeof rastreoSchema>;
 
 export default function RastreoPage() {
@@ -23,7 +23,7 @@ export default function RastreoPage() {
 
   const { control, register, handleSubmit, formState: { errors } } = useForm<RastreoValores>({
     resolver: zodResolver(rastreoSchema),
-    defaultValues: { numero: '', fecha: '' },
+    defaultValues: { consulta: '', fecha: '' },
   });
 
   const resultado = rastrear.data ?? null;
@@ -31,7 +31,7 @@ export default function RastreoPage() {
   const ubicacion = useUbicacionEnVivo(enRuta ? (resultado?.chofer_id ?? null) : null);
 
   // Si la guía cambia de estado mientras se mira, se vuelve a consultar sola
-  useCanalGuia(busqueda?.numero ?? null, () => {
+  useCanalGuia(resultado?.numero ?? null, () => {
     if (busqueda) rastrear.mutate(busqueda);
   });
 
@@ -56,13 +56,13 @@ export default function RastreoPage() {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <CampoControlado
             control={control}
-            name="numero"
+            name="consulta"
             filtro={filtrarGuia}
-            etiqueta="Número de guía"
-            placeholder="AE-000001"
+            etiqueta="Número de guía o código de rastreo"
+            placeholder="AE-000001 o 1A2B3C4D5E6F"
             autoCapitalize="characters"
-            ayuda="Formato AE-000000"
-            error={errors.numero?.message}
+            ayuda="El número AE-000000 necesita la fecha. El código de 12 caracteres no."
+            error={errors.consulta?.message}
           />
           <Campo
             etiqueta="Fecha de exportación"
@@ -89,14 +89,24 @@ export default function RastreoPage() {
             <p className="text-lg font-extrabold text-ink">{resultado.numero}</p>
             <ChipEstado estado={resultado.estado} />
           </div>
-          <div className="space-y-1 text-sm text-ink-2">
-            <p>
-              <span className="font-bold text-ink">Destinatario:</span> {resultado.destinatario}
-            </p>
-            <p>
-              <span className="font-bold text-ink">Dirección:</span> {resultado.direccion_entrega}
-            </p>
-          </div>
+          {resultado.destinatario || resultado.direccion_entrega ? (
+            <div className="space-y-1 text-sm text-ink-2">
+              <p>
+                <span className="font-bold text-ink">Destinatario:</span> {resultado.destinatario}
+              </p>
+              <p>
+                <span className="font-bold text-ink">Dirección:</span> {resultado.direccion_entrega}
+              </p>
+            </div>
+          ) : (
+            <Alerta tipo="info">
+              Esta guía aún no está vinculada a tu cuenta. Por seguridad solo mostramos el estado.
+              <Link to="/cliente/guias" className="ml-1 font-bold text-brand underline underline-offset-4">
+                Agrégala con tu código de 12 caracteres
+              </Link>{' '}
+              para ver destinatario, dirección y chófer.
+            </Alerta>
+          )}
 
           {enRuta ? (
             <div className="space-y-3">
@@ -131,17 +141,22 @@ export default function RastreoPage() {
             </Alerta>
           )}
 
-          <Link
-            to={`/cliente/guias/${resultado.id}`}
-            className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-brand bg-white px-5 font-bold text-brand hover:bg-soft"
-          >
-            Ver historial de estados
-          </Link>
+          {resultado.id ? (
+            <Link
+              to={`/cliente/guias/${resultado.id}`}
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[14px] border-[1.5px] border-brand bg-white px-5 font-bold text-brand hover:bg-soft"
+            >
+              Ver historial de estados
+            </Link>
+          ) : null}
         </Tarjeta>
       ) : null}
 
       {!resultado && !rastrear.isPending && !rastrear.isError ? (
-        <Vacio titulo="Sigue tu pedido" texto="Escribe el número de guía y la fecha en que fue exportada para ver dónde va." />
+        <Vacio
+          titulo="Sigue tu pedido"
+          texto="Escribe el número de guía y la fecha, o el código de 12 caracteres que te entregaron en recepción."
+        />
       ) : null}
     </LayoutMovil>
   );

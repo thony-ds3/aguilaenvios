@@ -58,13 +58,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const p = await leerPerfil(nueva.user.id);
+        let p = await leerPerfil(nueva.user.id);
         if (!activo) return;
         if (!p || !p.activo) {
           setError(p ? 'Tu cuenta está desactivada. Contacta al administrador.' : 'Tu cuenta no tiene perfil asignado. Contacta al administrador.');
           setPerfil(null);
           await supabase.auth.signOut();
         } else {
+          // Reparación suave: si el perfil quedó sin apellidos/teléfono (p. ej. el alta
+          // ocurrió con confirmación de correo y no había sesión), se recuperan de user_metadata.
+          const meta = nueva.user.user_metadata as Record<string, unknown> | undefined;
+          const cambios: Partial<Perfil> = {};
+          if (!p.apellidos && typeof meta?.apellidos === 'string' && meta.apellidos.trim()) {
+            cambios.apellidos = meta.apellidos.trim();
+          }
+          if (!p.telefono && typeof meta?.telefono === 'string' && meta.telefono.trim()) {
+            cambios.telefono = meta.telefono.trim();
+          }
+          if (Object.keys(cambios).length > 0) {
+            const { data } = await supabase
+              .from('perfiles')
+              .update(cambios)
+              .eq('id', nueva.user.id)
+              .select('*')
+              .maybeSingle();
+            if (data) p = data as Perfil;
+          }
           setError(null);
           setPerfil(p);
         }
@@ -107,7 +126,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: datos.correo,
       password: datos.clave,
       options: {
-        data: { full_name: datos.nombres }, // handle_new_user crea el perfil de cliente
+        data: {
+          full_name: datos.nombres,
+          apellidos: datos.apellidos,
+          telefono: datos.telefono || null,
+        },
         emailRedirectTo: `${window.location.origin}/login`,
       },
     });
@@ -115,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.session && data.user) {
       const { error: e2 } = await supabase
         .from('perfiles')
-        .update({ apellidos: datos.apellidos, telefono: datos.telefono || null })
+        .update({ nombres: datos.nombres, apellidos: datos.apellidos, telefono: datos.telefono || null })
         .eq('id', data.user.id);
       if (e2) throw new Error(traducirError(e2));
     }

@@ -1,4 +1,4 @@
-// [FE] Cliente 2/4 · Mis envíos: resumen (total, en ruta, entregadas), agregar guía por número y lista
+// [FE] Cliente 2/4 · Mis envíos: resumen (total, en ruta, entregadas), agregar guía por código y lista
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,10 +8,10 @@ import { LayoutMovil } from '@/components/LayoutMovil';
 import { CampoControlado } from '@/components/Campo';
 import { Alerta, Boton, ChipEstado, Cargando, ErrorMsg, Tarjeta, Vacio } from '@/components/ui';
 import { useMisGuias, useResumenCliente, useVincularGuia } from '@/hooks/useCliente';
-import { filtrarGuia, numeroGuiaSchema } from '@/lib/validacion';
+import { codigoRastreoSchema, filtrarGuia } from '@/lib/validacion';
 import { formatearFecha } from '@/lib/formato';
 
-const agregarSchema = z.object({ numero: numeroGuiaSchema });
+const agregarSchema = z.object({ consulta: codigoRastreoSchema });
 type AgregarValores = z.infer<typeof agregarSchema>;
 
 function Estadistica({ valor, etiqueta }: { valor: number | string; etiqueta: string }) {
@@ -31,14 +31,14 @@ export default function MisEnviosPage() {
 
   const { control, handleSubmit, reset, formState: { errors } } = useForm<AgregarValores>({
     resolver: zodResolver(agregarSchema),
-    defaultValues: { numero: '' },
+    defaultValues: { consulta: '' },
   });
 
   const onAgregar = async (v: AgregarValores) => {
     setAviso(null);
     try {
-      await vincular.mutateAsync(v.numero);
-      reset({ numero: '' });
+      await vincular.mutateAsync(v.consulta);
+      reset({ consulta: '' });
       setAviso('Guía agregada a tus envíos.');
     } catch {
       // El mensaje de error se muestra abajo desde vincular.error
@@ -61,18 +61,18 @@ export default function MisEnviosPage() {
 
       <Tarjeta>
         <form onSubmit={handleSubmit(onAgregar)} noValidate className="space-y-4">
-          <p className="font-extrabold text-ink">Agregar guía por número</p>
+          <p className="font-extrabold text-ink">Agregar guía con el código de rastreo</p>
           {vincular.isError ? <Alerta tipo="error">{vincular.error.message}</Alerta> : null}
           {aviso ? <Alerta tipo="ok">{aviso}</Alerta> : null}
           <CampoControlado
             control={control}
-            name="numero"
+            name="consulta"
             filtro={filtrarGuia}
-            etiqueta="Número de guía"
-            placeholder="AE-000001"
+            etiqueta="Código de rastreo"
+            placeholder="1A2B3C4D5E6F"
             autoCapitalize="characters"
-            ayuda="Formato AE-000000"
-            error={errors.numero?.message}
+            ayuda="12 caracteres (letras A-F y números). Te lo entregan en recepción al crear la guía."
+            error={errors.consulta?.message}
           />
           <Boton type="submit" className="w-full" disabled={vincular.isPending}>
             {vincular.isPending ? 'Agregando…' : 'Agregar guía'}
@@ -84,7 +84,7 @@ export default function MisEnviosPage() {
         {guias.isPending ? <Cargando mensaje="Cargando tus guías…" /> : null}
         {guias.isError ? <ErrorMsg mensaje={guias.error.message} onReintentar={() => void guias.refetch()} /> : null}
         {guias.data && guias.data.length === 0 ? (
-          <Vacio titulo="Aún no tienes guías" texto="Agrega tu número de guía (AE-000000) para empezar a seguirla." />
+          <Vacio titulo="Aún no tienes guías" texto="Agrega el código de 12 caracteres que te dieron en recepción para empezar a seguirla." />
         ) : null}
         {guias.data?.map((guia) => (
           <Tarjeta key={guia.id} className="space-y-3">

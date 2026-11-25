@@ -56,6 +56,8 @@ export interface Guia {
   viaje_id: string | null;
   orden_parada: number | null;
   entregada_at: string | null;
+  // Migración 006: código aleatorio para rastrear sin exponer el número correlativo
+  codigo_rastreo?: string | null;
   created_at: string;
 }
 
@@ -96,11 +98,14 @@ export interface Parada {
 
 // Respuesta de la función rastrear_guia (ver supabase/migrations/002_rastreo_cliente.sql)
 export interface RastreoRespuesta {
-  id: string;
+  // La RPC devuelve id/destinatario/dirección solo si la guía pertenece al cliente.
+  // Para guías sin dueño, `rastrear_guia` entrega únicamente numero, estado y fechas.
+  id: string | null;
   numero: string;
+  codigo_rastreo?: string | null;
   estado: EstadoGuia;
-  destinatario: string;
-  direccion_entrega: string;
+  destinatario: string | null;
+  direccion_entrega: string | null;
   fecha_recepcion: string;
   entregada_at: string | null;
   chofer_id: string | null;

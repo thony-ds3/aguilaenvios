@@ -5,8 +5,13 @@ import { divIcon, latLngBounds } from 'leaflet';
 
 export const CENTRO_LA_PAZ: [number, number] = [-16.4955, -68.1336];
 
-const MOSAICOS = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const ATRIBUCION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// Hallazgo 20: el proveedor de mosaicos se configura por entorno para no depender del servidor
+// público de OpenStreetMap en producción (su política de uso prohíbe el tráfico masivo).
+const MOSAICOS =
+  import.meta.env.VITE_TILES_URL ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const ATRIBUCION =
+  import.meta.env.VITE_TILES_ATTRIBUTION ??
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 const iconoChofer = divIcon({
   className: '',

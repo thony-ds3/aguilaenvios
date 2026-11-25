@@ -9,6 +9,8 @@ import LoginPage from '@/features/auth/LoginPage';
 import CrearCuentaPage from '@/features/auth/CrearCuentaPage';
 import RecuperarPage from '@/features/auth/RecuperarPage';
 import RestablecerPage from '@/features/auth/RestablecerPage';
+import SeguridadPage from '@/features/auth/SeguridadPage';
+import CambiarClavePage from '@/features/auth/CambiarClavePage';
 import RastreoPage from '@/features/cliente/RastreoPage';
 import MisEnviosPage from '@/features/cliente/MisEnviosPage';
 import HistorialPage from '@/features/cliente/HistorialPage';
@@ -25,10 +27,21 @@ import UsuariosRecintoPage from '@/features/admin/UsuariosRecintoPage';
 import EnviosRecintoPage from '@/features/admin/EnviosRecintoPage';
 import RecintosPage from '@/features/superadmin/RecintosPage';
 import UsuariosSistemaPage from '@/features/superadmin/UsuariosSistemaPage';
+import AuditoriaPage from '@/features/superadmin/AuditoriaPage';
 
-function protegida(roles: Rol[], elemento: ReactNode) {
-  return <RutaProtegida roles={roles}>{elemento}</RutaProtegida>;
+function protegida(
+  roles: Rol[],
+  elemento: ReactNode,
+  opciones?: { omitirMfa?: boolean; omitirClaveForzada?: boolean },
+) {
+  return (
+    <RutaProtegida roles={roles} {...opciones}>
+      {elemento}
+    </RutaProtegida>
+  );
 }
+
+const ROLES_PERSONAL: Rol[] = ['recepcion', 'logistica', 'chofer', 'admin'];
 
 function ConfiguracionFaltante() {
   return (
@@ -58,6 +71,19 @@ export default function App() {
       <Route path="/recuperar-contrasena" element={<RecuperarPage />} />
       <Route path="/restablecer-contrasena" element={<RestablecerPage />} />
 
+      {/* Seguridad de la cuenta (personal y clientes) */}
+      <Route
+        path="/seguridad"
+        element={protegida(['cliente', ...ROLES_PERSONAL], <SeguridadPage />, { omitirMfa: true })}
+      />
+      <Route
+        path="/cambiar-clave"
+        element={protegida(['cliente', ...ROLES_PERSONAL], <CambiarClavePage />, {
+          omitirMfa: true,
+          omitirClaveForzada: true,
+        })}
+      />
+
       {/* Cliente (móvil) */}
       <Route path="/cliente/rastreo" element={protegida(['cliente'], <RastreoPage />)} />
       <Route path="/cliente/guias" element={protegida(['cliente'], <MisEnviosPage />)} />
@@ -85,6 +111,7 @@ export default function App() {
       {/* Superadmin (escritorio) */}
       <Route path="/superadmin/recintos" element={protegida(['superadmin'], <RecintosPage />)} />
       <Route path="/superadmin/usuarios" element={protegida(['superadmin'], <UsuariosSistemaPage />)} />
+      <Route path="/superadmin/auditoria" element={protegida(['superadmin'], <AuditoriaPage />)} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

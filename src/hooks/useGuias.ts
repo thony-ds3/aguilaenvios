@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useRealtimeInvalidar } from '@/hooks/useRealtime';
 import { traducirError } from '@/lib/errores';
 import { hoyISO } from '@/lib/validacion';
@@ -40,15 +41,17 @@ export function useGuias(recintoId: string | null, filtro: FiltroGuias) {
 }
 
 // Búsqueda opcional de cliente por nombre, apellido o teléfono (RLS: recepción ve los perfiles de clientes)
+// Hallazgo 12: se retrasa 300 ms la consulta y solo se piden las columnas visibles (sin correo ni metadatos).
 export function useBuscarClientes(texto: string) {
-  const limpio = texto.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]/g, '').trim();
+  const retrasado = useDebounce(texto, 300);
+  const limpio = retrasado.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]/g, '').trim();
   return useQuery({
     queryKey: ['clientes', limpio],
     enabled: limpio.length >= 2,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('perfiles')
-        .select('*')
+        .select('id,nombres,apellidos,telefono')
         .eq('rol', 'cliente')
         .eq('activo', true)
         .or(`nombres.ilike.%${limpio}%,apellidos.ilike.%${limpio}%,telefono.ilike.%${limpio}%`)

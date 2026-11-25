@@ -7,8 +7,10 @@ const MAPA: Array<[string, string]> = [
   ['Email not confirmed', 'Debes confirmar tu correo antes de ingresar. Revisa tu bandeja de entrada.'],
   ['already registered', 'Ya existe una cuenta con este correo.'],
   ['already been registered', 'Ya existe una cuenta con este correo.'],
-  ['Password should be at least', 'La contraseña debe tener al menos 8 caracteres.'],
+  ['Password should be at least', 'La contraseña debe tener al menos 10 caracteres.'],
   ['rate limit', 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.'],
+  ['demasiados usuarios', 'Has creado demasiados usuarios en la última hora. Intenta más tarde.'],
+  ['Origen no autorizado', 'El dominio desde el que intentas crear usuarios no está autorizado.'],
   ['For security purposes', 'Por seguridad, espera unos segundos antes de volver a intentarlo.'],
   ['Unable to validate email address', 'El correo no tiene un formato válido.'],
   ['Auth session missing', 'Tu sesión expiró. Vuelve a iniciar sesión.'],
@@ -30,6 +32,7 @@ const MAPA: Array<[string, string]> = [
   // Funciones de negocio
   ['Guía no encontrada o ya vinculada', 'Esa guía no existe o ya está vinculada a otra cuenta.'],
   ['Guía no encontrada', 'No encontramos una guía con ese número y fecha.'],
+  ['Código de rastreo no encontrado', 'No encontramos una guía con ese código. Revísalo e inténtalo de nuevo.'],
   ['Solo clientes', 'Esta acción es solo para clientes.'],
   ['Sin permiso para cambiar rol', 'No tienes permiso para cambiar el rol, el recinto o el estado de este usuario.'],
 

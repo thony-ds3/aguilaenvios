@@ -5,8 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { traducirError } from '@/lib/errores';
 
-// Modo prueba: se activa con VITE_MODO_PRUEBA=true (en producción debe quedar en false)
-export const MODO_PRUEBA: boolean = import.meta.env.VITE_MODO_PRUEBA === 'true';
+// Modo prueba: solo en desarrollo y con VITE_MODO_PRUEBA=true. En un build de producción
+// import.meta.env.DEV es false, así que el simulador de GPS queda deshabilitado aunque la
+// variable se filtre por error en el .env de producción (hallazgo 20).
+export const MODO_PRUEBA: boolean = import.meta.env.DEV && import.meta.env.VITE_MODO_PRUEBA === 'true';
 
 const INTERVALO_MS = 4500;
 
@@ -189,6 +191,7 @@ export function useUbicacion(choferId: string | null, rutaActiva: boolean) {
   // Modo prueba: mueve un punto por una ruta predefinida escribiendo en `ubicaciones`
   const simular = useCallback(
     (ruta: Punto[]) => {
+      if (!MODO_PRUEBA) return;
       if (!choferId || !rutaActiva || ruta.length === 0) return;
       detener();
       setErrorGps(null);

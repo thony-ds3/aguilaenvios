@@ -136,7 +136,8 @@ export function useAccionesViaje(viajeId: string) {
   return { agregar, asignarChofer, marcarEnRuta, reordenar };
 }
 
-// Chóferes del recinto (activos e inactivos; cada pantalla filtra lo que necesita)
+// Chóferes del recinto (activos e inactivos; cada pantalla filtra lo que necesita).
+// Hallazgo 13: se piden solo las columnas que la interfaz muestra, no la fila completa.
 export function useChoferes(recintoId: string | null) {
   return useQuery({
     queryKey: ['choferes', recintoId],
@@ -144,7 +145,7 @@ export function useChoferes(recintoId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('perfiles')
-        .select('*')
+        .select('id,nombres,apellidos,telefono,rol,recinto_id,activo,created_at')
         .eq('rol', 'chofer')
         .eq('recinto_id', recintoId as string)
         .order('nombres');

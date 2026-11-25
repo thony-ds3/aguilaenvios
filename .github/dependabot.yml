@@ -1,0 +1,35 @@
+# [FE] Dependabot: revisa dependencias npm y acciones de GitHub cada semana.
+# Los avisos de seguridad se agrupan; las actualizaciones de versión llegan por separado
+# para poder revisar el build antes de fusionar.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/La_Paz
+    open-pull-requests-limit: 5
+    groups:
+      seguridad:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      produccion:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      desarrollo:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

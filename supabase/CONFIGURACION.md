@@ -8,12 +8,33 @@ Pasos que se hacen una sola vez en el panel de Supabase y con la CLI. Nada de es
 2. `migrations/002_rastreo_cliente.sql`: función `rastrear_guia` (rastreo del cliente por guía y fecha).
 3. `migrations/003_reordenar_paradas.sql`: función `reordenar_paradas` (logística ordena las paradas).
 4. `migrations/004_cuentas_inactivas.sql`: opcional y recomendada. Impide que una cuenta desactivada siga usando las funciones de viaje.
-5. `datos_iniciales.sql`: recintos reales y primer superadmin (edita los textos en mayúsculas antes de ejecutar).
+5. `migrations/005_auditoria_y_limites.sql`: bitácora de cambios administrativos (solo superadmin la lee) y límite de altas por hora.
+6. `migrations/006_codigo_rastreo.sql`: **necesaria para vincular guías desde "Mis envíos"**. Agrega el código aleatorio de 12 caracteres y las funciones `rastrear_guia_codigo` y `vincular_guia_codigo`. Sin ella, la tabla del esquema compartido no tiene la columna que usa esta función.
+7. `migrations/007_endurecer_rastreo.sql`: **obligatoria**. `rastrear_guia` deja de vincular la guía y ya no devuelve destinatario, dirección ni chófer si la guía no es del cliente; revoca `vincular_guia` y agrega un trigger que impide que un cliente modifique guías por PostgREST.
+8. `migrations/008_reparar_perfiles.sql`: crea el perfil de las cuentas de `auth.users` que quedaron sin fila en `perfiles`.
+9. `migrations/009_blindar_privilegios.sql`: **obligatoria**. Triggers que impiden que un cliente se cambie el `rol` en `perfiles`, que un chófer reporte la ubicación de otro y que se reasignen viajes ajenos, aunque una política RLS sea demasiado amplia.
+10. `datos_iniciales.sql`: recintos reales y primer superadmin (edita los textos en mayúsculas antes de ejecutar).
+
+Después de aplicar todo, ejecuta `diagnostico_rls.sql` (solo lectura) en el SQL Editor. También revisa que existan las vistas, columnas y funciones RPC que invoca la aplicación. El esquema que compartiste solo lista las tablas; por sí solo no define esas dependencias.
+
+El archivo principal `aguila_envios_supabase_v2.sql`, mencionado abajo, no está incluido en esta carpeta. Si aún no ejecutaste ese esquema en el proyecto, recupéralo antes de aplicar las migraciones: estas dependen de funciones, vistas, triggers y políticas RLS que se crean allí.
+
+Luego revisa:
+
+- **RLS activo** en las 7 tablas del dominio y en `auditoria`.
+- **Políticas de `guias`**: el `SELECT` del cliente debe filtrar por `cliente_id = auth.uid()`; el `UPDATE`/`DELETE` de cliente no debe existir.
+- **RPC de rastreo/vínculo**: solo `authenticated` debe tener `EXECUTE`; nunca `anon` ni `PUBLIC`.
+- **Trigger `proteger_guia_cliente`** habilitado y `guias_sin_codigo = 0`.
+
+El script también lista perfiles huérfanos y funciones `SECURITY DEFINER` con sus permisos.
 
 ## 2. Autenticación
 
 ### Contraseña mínima
-Authentication > Sign In / Providers > Email > **Minimum password length = 8**.
+Authentication > Sign In / Providers > Email > **Minimum password length = 10**.
+
+La app también exige letras y números y bloquea contraseñas comunes (ver `src/lib/clave.ts`).
+La configuración del panel es la última barrera: debe coincidir con la del código.
 
 ### Direcciones permitidas
 Authentication > URL Configuration:
@@ -64,14 +85,23 @@ El servicio de correo incluido en Supabase permite muy pocos envíos por hora. P
 
 Necesaria para "Agregar usuario" (admin y superadmin). La clave secreta vive solo en el servidor.
 
+```powershell
+.\scripts\desplegar-funcion.ps1 -Origenes "https://TU-DOMINIO.com"
+```
+
+O manualmente:
+
 ```bash
 npm install -g supabase            # o: npx supabase <comando>
 supabase login
 cd aguila_envios
-supabase functions deploy crear-usuario --project-ref ifbexbcoujmdfgvryzfm --no-verify-jwt
+supabase secrets set AE_ALLOWED_ORIGINS="https://TU-DOMINIO.com,http://localhost:5173"
+supabase functions deploy crear-usuario --project-ref ifbexbcoujmdfgvryzfm
 ```
 
-`--no-verify-jwt` es obligatorio con las claves nuevas (`sb_publishable_...`): la pasarela de Supabase no las acepta como JWT. La función valida por su cuenta la sesión de quien llama y comprueba que sea admin o superadmin activo.
+`supabase/config.toml` ya define `verify_jwt = false`: la pasarela de Supabase no acepta las claves nuevas (`sb_publishable_...`) como JWT, así que la función valida por su cuenta la sesión de quien llama y comprueba que sea admin o superadmin activo. Si despliegas desde la CLI, no necesitas añadir `--no-verify-jwt`.
+
+`AE_ALLOWED_ORIGINS` es obligatorio en producción: sin el dominio correcto, el navegador recibe 403. La función limita a 10 altas por hora por cuenta y registra cada alta en `auditoria` cuando la migración 005 está aplicada.
 
 La plataforma entrega la clave secreta a la función de forma automática. Si al crear un usuario aparece "La función no tiene configurada la clave del servidor", guárdala como secreto propio (Settings > API Keys > Secret key):
 
@@ -93,6 +123,14 @@ En Vercel, Netlify o Cloudflare Pages:
 | --- | --- |
 | `VITE_SUPABASE_URL` | `https://ifbexbcoujmdfgvryzfm.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | la clave `sb_publishable_...` |
-| `VITE_MODO_PRUEBA` | `false` en producción |
+| `VITE_MODO_PRUEBA` | `false` en producción (solo se activa en `npm run dev`) |
+| `VITE_TILES_URL` | opcional: proveedor de mosaicos propio (MapTiler, Stadia…) |
+| `VITE_TILES_ATTRIBUTION` | atribución que exige ese proveedor |
 
 Comando de compilación: `npm run build`. Carpeta de salida: `dist`.
+
+### Cabeceras de seguridad
+
+- En Vercel se aplican con `vercel.json`.
+- En Netlify o Cloudflare Pages se aplican con `public/_headers` (Vite lo copia a `dist`).
+- Si cambias `VITE_TILES_URL`, agrega su dominio en `img-src` y `connect-src` de la CSP o los mosaicos no cargarán.

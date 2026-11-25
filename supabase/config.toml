@@ -1,0 +1,7 @@
+# [BE] Configuración de Supabase CLI para Águila Envíos.
+# La función crear-usuario valida la sesión por dentro, así que se despliega sin verify_jwt
+# (la pasarela no acepta las claves nuevas sb_publishable_ como JWT).
+project_id = "ifbexbcoujmdfgvryzfm"
+
+[functions.crear-usuario]
+verify_jwt = false

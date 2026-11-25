@@ -6,13 +6,14 @@ import { traducirError } from '@/lib/errores';
 import type { Perfil, Rol } from '@/lib/tipos';
 
 // Perfiles de un recinto (admin) o de todo el sistema (superadmin). RLS decide qué filas llegan.
+// Hallazgo 13: columnas explícitas para no traer datos que la tabla no necesita (p. ej. correo).
 export function useUsuarios(filtro: { recintoId: string | null } | 'todos') {
   const clave = filtro === 'todos' ? 'todos' : filtro.recintoId;
   return useQuery({
     queryKey: ['usuarios', clave],
     enabled: filtro === 'todos' || Boolean(filtro.recintoId),
     queryFn: async () => {
-      let consulta = supabase.from('perfiles').select('*');
+      let consulta = supabase.from('perfiles').select('id,nombres,apellidos,telefono,rol,recinto_id,activo,created_at');
       if (filtro !== 'todos') consulta = consulta.eq('recinto_id', filtro.recintoId as string);
       const { data, error } = await consulta.order('nombres').limit(1000);
       if (error) throw new Error(traducirError(error));

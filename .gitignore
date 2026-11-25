@@ -2,6 +2,21 @@
 node_modules/
 dist/
 dev-dist/
+
+# Entorno y secretos: nunca subir claves reales
 .env
-.env.*.local
+.env.*
+!.env.example
 *.local
+*.pem
+*.key
+*.p12
+
+# Herramientas, registros y sistema
+.vercel/
+supabase/.temp/
+*.log
+npm-debug.log*
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

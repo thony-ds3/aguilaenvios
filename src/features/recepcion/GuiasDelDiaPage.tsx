@@ -53,7 +53,14 @@ export default function GuiasDelDiaPage() {
             >
               {lista.map((g) => (
                 <tr key={g.id}>
-                  <td className={`${CELDA} font-extrabold`}>{g.numero}</td>
+                  <td className={`${CELDA} font-extrabold`}>
+                    {g.numero}
+                    {g.codigo_rastreo ? (
+                      <span className="block font-mono text-xs font-normal text-ink-2" title="Código de rastreo para el cliente">
+                        {g.codigo_rastreo}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className={CELDA}>{formatearHora(g.created_at)}</td>
                   <td className={CELDA}>{g.remitente}</td>
                   <td className={CELDA}>{g.destinatario}</td>

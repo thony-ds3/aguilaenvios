@@ -94,6 +94,15 @@ export default function NuevaGuiaPage() {
             <p className="text-sm font-bold text-ink-2">Número de guía</p>
             <p className="text-4xl font-extrabold tracking-wide text-brand">{creada.numero}</p>
           </div>
+          {creada.codigo_rastreo ? (
+            <div>
+              <p className="text-sm font-bold text-ink-2">Código de rastreo (entrégalo al cliente)</p>
+              <p className="font-mono text-2xl font-extrabold tracking-widest text-ink">{creada.codigo_rastreo}</p>
+              <p className="text-xs text-ink-2">
+                Sirve para seguir el envío sin la fecha y evita que alguien adivine el número correlativo.
+              </p>
+            </div>
+          ) : null}
           <dl className="grid gap-2 text-sm text-ink-2 sm:grid-cols-2">
             <div>
               <dt className="font-bold text-ink">Destinatario</dt>
@@ -191,7 +200,7 @@ export default function NuevaGuiaPage() {
           <Tarjeta className="space-y-3">
             <h2 className="text-lg font-extrabold text-ink">Cliente (opcional)</h2>
             <p className="text-sm text-ink-2">
-              Si el cliente ya tiene cuenta, vincúlalo para que vea la guía en "Mis envíos". Si no, podrá agregarla después con el número.
+              Si el cliente ya tiene cuenta, vincúlalo para que vea la guía en "Mis envíos". Si no, podrá agregarla después con el código de rastreo de 12 caracteres que aparece al crear la guía.
             </p>
             {cliente ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-line bg-soft p-3">
