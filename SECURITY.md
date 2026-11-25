@@ -21,11 +21,12 @@ Marca lo que ya esté hecho. Ninguna de estas tareas se puede completar solo con
 - [ ] **Repositorio privado.** El proyecto estaba publicado en un repositorio público. Un repo
       público expone el historial y cualquier secreto que se haya subido por error. Cámbialo a
       privado y rota las claves que hayan estado en él.
-- [ ] **Aplicar migraciones 005–008** en Supabase → SQL Editor, en orden:
+- [ ] **Aplicar migraciones 005–009** en Supabase → SQL Editor, en orden:
       - `supabase/migrations/005_auditoria_y_limites.sql`
       - `supabase/migrations/006_codigo_rastreo.sql`
       - `supabase/migrations/007_endurecer_rastreo.sql`
       - `supabase/migrations/008_reparar_perfiles.sql`
+      - `supabase/migrations/009_blindar_privilegios.sql`
       - Después, ejecutar `supabase/diagnostico_rls.sql` (solo lectura) y revisar el resultado.
 - [ ] **Desplegar la Edge Function** `crear-usuario` (ver `scripts/desplegar-funcion.ps1`).
       Sin ella, el alta de usuarios desde `/superadmin/usuarios` sigue fallando.
@@ -59,6 +60,7 @@ Marca lo que ya esté hecho. Ninguna de estas tareas se puede completar solo con
 | 14 · Edge Function | CORS con lista blanca, límite de 10 altas por hora por cuenta, cuerpo máximo y validación doble. |
 | 15 · Alta de usuarios | Función lista para desplegar; el error de "no desplegada" es explícito. |
 | 16 · Rastreo | Código aleatorio de 12 caracteres (`rastrear_guia_codigo`) que no vincula la guía al consultarla, vínculo seguro a "Mis envíos" (`vincular_guia_codigo`), `vincular_guia` revocada y trigger anti-suplantación en `guias`. |
+| 16 · Privilegios | Triggers `proteger_perfil_privilegios`, `proteger_ubicacion_chofer` y `proteger_viaje_chofer`: un cliente no puede cambiarse el rol, un chófer no puede mover la ubicación de otro ni reasignarse viajes. |
 | 17 · Repositorio | `.gitignore` endurecido, Dependabot y este documento. |
 | 18 · Dependencias | Revisión semanal automatizada; `npm audit --omit=dev` limpio. |
 | 19 · Cabeceras | CSP, HSTS, `nosniff`, `frame-ancestors`, `Referrer-Policy` y `Permissions-Policy`. |
@@ -70,8 +72,14 @@ Marca lo que ya esté hecho. Ninguna de estas tareas se puede completar solo con
   reemplaza: ya **no vincula** la guía y, si la guía no pertenece al cliente, solo devuelve
   numero/estado/fechas (sin destinatario, dirección ni chófer). `vincular_guia` quedó revocada;
   el único vínculo es por código (`vincular_guia_codigo`).
-- La protección de MFA es de experiencia: RLS no puede comprobar el nivel aal2. Si se necesita
-  exigencia estricta en el servidor, hay que añadir políticas/claims específicos.
+- La protección de MFA cubre la app y la Edge Function `crear-usuario` (comprueba el claim
+  `aal` y los factores verificados). RLS no puede comprobar aal2: una llamada directa a
+  PostgREST con la sesión aal1 seguiría pasando las políticas. Para exigencia estricta en la
+  base habría que añadir políticas basadas en un claim personalizado.
+- Los triggers de la migración 009 protegen aunque una política RLS sea demasiado amplia
+  (auto-promoción de rol, ubicación ajena, reasignación de viajes). Aun así, conviene revisar y
+  corregir las políticas con `diagnostico_rls.sql`; los triggers son una segunda barrera, no un
+  sustituto de RLS.
 - Los metadatos `debe_cambiar_clave` son un control de UX; un usuario con la contraseña
   temporal podría llamar a la API directamente. Para una frontera real se necesitaría una
   columna en `perfiles` y una política/trigger que la respete.

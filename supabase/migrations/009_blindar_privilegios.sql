@@ -8,7 +8,8 @@
 -- Estos triggers cierran esa vía aunque la política sea demasiado amplia:
 --
 --   1) perfiles: solo admin/superadmin (o service_role) cambian rol, activo,
---      recinto_id o id. El resto puede seguir editando nombres/apellidos/teléfono.
+--      recinto_id o id. El resto solo edita su propio perfil y solo
+--      nombres/apellidos/teléfono.
 --   2) ubicaciones: un chófer solo puede escribir su propia posición; los clientes
 --      no pueden escribir ubicaciones.
 --   3) viajes: un chófer no puede reasignar el chófer, el recinto ni el creador de
@@ -40,6 +41,11 @@ begin
      or new.activo is distinct from old.activo
      or new.recinto_id is distinct from old.recinto_id then
     raise exception 'No puedes cambiar tu rol, estado o recinto';
+  end if;
+
+  -- Sin privilegios de administración solo se edita el propio perfil
+  if old.id is distinct from auth.uid() then
+    raise exception 'Solo puedes editar tu propio perfil';
   end if;
 
   return new;

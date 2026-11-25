@@ -25,6 +25,7 @@ Luego revisa:
 - **Políticas de `guias`**: el `SELECT` del cliente debe filtrar por `cliente_id = auth.uid()`; el `UPDATE`/`DELETE` de cliente no debe existir.
 - **RPC de rastreo/vínculo**: solo `authenticated` debe tener `EXECUTE`; nunca `anon` ni `PUBLIC`.
 - **Trigger `proteger_guia_cliente`** habilitado y `guias_sin_codigo = 0`.
+- **Triggers de la migración 009** (`proteger_perfil_privilegios`, `proteger_ubicacion_chofer`, `proteger_viaje_chofer`) habilitados.
 
 El script también lista perfiles huérfanos y funciones `SECURITY DEFINER` con sus permisos.
 
