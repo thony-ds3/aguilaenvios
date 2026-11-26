@@ -44,6 +44,7 @@ export default function LoginPage() {
     try {
       await iniciarSesion(valores.correo, valores.clave);
     } catch (e) {
+      console.log(e);
       setErrorForm(e instanceof Error ? e.message : 'No se pudo iniciar sesión.');
     } finally {
       setEnviando(false);
