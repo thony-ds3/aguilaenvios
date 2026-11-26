@@ -44,40 +44,64 @@ revoke all on public.auditoria from anon, authenticated;
 grant select on public.auditoria to authenticated;
 
 -- Función común de los triggers. Guarda solo los campos relevantes (no PII completa).
+-- IMPORTANTE: en INSERT no existe OLD y en DELETE no existe NEW. Acceder al registro
+-- que no existe lanza "record is not assigned yet" y haría fallar el INSERT del perfil
+-- (es decir, rompería todos los registros). Por eso cada operación se trata aparte.
 create or replace function public.registrar_auditoria() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
   v_accion text := lower(tg_table_name) || '_' || lower(tg_op);
   v_entidad_id text;
   v_datos jsonb;
+  v_antes jsonb;
+  v_despues jsonb;
 begin
   if tg_table_name = 'perfiles' then
-    if tg_op = 'UPDATE'
-       and old.rol is not distinct from new.rol
-       and old.recinto_id is not distinct from new.recinto_id
-       and old.activo is not distinct from new.activo then
-      return new;  -- nada relevante cambió
+    -- El IF del UPDATE va anidado: en INSERT no existe OLD y no se debe evaluar
+    -- old.rol (PostgreSQL no garantiza el cortocircuito de AND).
+    if tg_op = 'UPDATE' then
+      if old.rol is not distinct from new.rol
+         and old.recinto_id is not distinct from new.recinto_id
+         and old.activo is not distinct from new.activo then
+        return new;  -- nada relevante cambió
+      end if;
     end if;
-    v_entidad_id := coalesce(new.id, old.id)::text;
-    v_datos := jsonb_build_object(
-      'antes',  jsonb_build_object('rol', old.rol, 'recinto_id', old.recinto_id, 'activo', old.activo),
-      'despues', jsonb_build_object('rol', new.rol, 'recinto_id', new.recinto_id, 'activo', new.activo)
-    );
+
+    if tg_op in ('UPDATE', 'DELETE') then
+      v_antes := jsonb_build_object('rol', old.rol, 'recinto_id', old.recinto_id, 'activo', old.activo);
+    end if;
+    if tg_op in ('INSERT', 'UPDATE') then
+      v_despues := jsonb_build_object('rol', new.rol, 'recinto_id', new.recinto_id, 'activo', new.activo);
+    end if;
+    v_datos := jsonb_build_object('antes', v_antes, 'despues', v_despues);
+    v_entidad_id := case when tg_op = 'DELETE' then old.id::text else new.id::text end;
   elsif tg_table_name = 'recintos' then
-    v_entidad_id := coalesce(new.id, old.id)::text;
-    v_datos := jsonb_build_object(
-      'antes',  case when tg_op = 'INSERT' then null else jsonb_build_object('nombre', old.nombre, 'departamento', old.departamento, 'activo', old.activo) end,
-      'despues', case when tg_op = 'DELETE' then null else jsonb_build_object('nombre', new.nombre, 'departamento', new.departamento, 'activo', new.activo) end
-    );
+    if tg_op in ('UPDATE', 'DELETE') then
+      v_antes := jsonb_build_object('nombre', old.nombre, 'departamento', old.departamento, 'activo', old.activo);
+    end if;
+    if tg_op in ('INSERT', 'UPDATE') then
+      v_despues := jsonb_build_object('nombre', new.nombre, 'departamento', new.departamento, 'activo', new.activo);
+    end if;
+    v_datos := jsonb_build_object('antes', v_antes, 'despues', v_despues);
+    v_entidad_id := case when tg_op = 'DELETE' then old.id::text else new.id::text end;
   elsif tg_table_name = 'pagos' then
-    v_entidad_id := coalesce(new.guia_id, old.guia_id)::text;
-    v_datos := jsonb_build_object('guia_id', coalesce(new.guia_id, old.guia_id), 'monto', new.monto, 'metodo', new.metodo);
+    if tg_op in ('UPDATE', 'DELETE') then
+      v_antes := jsonb_build_object('guia_id', old.guia_id, 'monto', old.monto, 'metodo', old.metodo);
+    end if;
+    if tg_op in ('INSERT', 'UPDATE') then
+      v_despues := jsonb_build_object('guia_id', new.guia_id, 'monto', new.monto, 'metodo', new.metodo);
+    end if;
+    v_datos := jsonb_build_object('antes', v_antes, 'despues', v_despues);
+    v_entidad_id := case when tg_op = 'DELETE' then old.guia_id::text else new.guia_id::text end;
   end if;
 
   insert into public.auditoria (actor_id, actor_rol, accion, entidad, entidad_id, datos)
   values (auth.uid(), public.mi_rol(), v_accion, tg_table_name, v_entidad_id, v_datos);
 
-  return coalesce(new, old);
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end $$;
 
 drop trigger if exists auditoria_perfiles on public.perfiles;

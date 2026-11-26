@@ -8,9 +8,44 @@
 --      nunca destinatario, dirección ni chófer (evita enumerar PII con AE-000000 + fecha).
 --   3) `vincular_guia` (solo número correlativo) queda revocada: el vínculo seguro es
 --      `vincular_guia_codigo` (código aleatorio de 12 caracteres).
---   4) Un trigger impide que un cliente cambie el dueño o cualquier campo de una guía
---      directamente por PostgREST; la única excepción es la RPC segura por código.
+--   4) Un trigger impide que un cliente cree, modifique o borre guías directamente por
+--      PostgREST; la única excepción es la RPC segura por código.
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- 0) Contexto de servidor (lo usan 007, 009 y los triggers de 010)
+--
+-- No sirve `auth.uid() is null`: también es nulo para `anon`. Hay que distinguir:
+--   - API con clave secreta (service_role): Edge Functions y tareas administrativas.
+--   - SQL Editor / psql / migraciones: no hay solicitud PostgREST.
+--   - `anon`: sí hay solicitud PostgREST, pero sin usuario. Nunca cuenta como servidor.
+--
+-- Es SECURITY INVOKER a propósito: solo lee los GUC que PostgREST deja en la sesión,
+-- así que funciona igual dentro de funciones SECURITY DEFINER (que es donde se usa).
+-- ------------------------------------------------------------
+create or replace function public.contexto_servidor() returns boolean
+language sql stable security invoker set search_path = public, pg_temp as $$
+  select
+    -- Clave secreta de la API (Edge Functions, scripts con service_role)
+    coalesce(auth.role(), '') = 'service_role'
+    or coalesce(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+    or coalesce(
+         nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+         ''
+       ) = 'service_role'
+    -- SQL Editor, psql, migraciones y el trigger de auth.users (GoTrue no usa PostgREST)
+    or (
+      coalesce(current_setting('request.method', true), '') = ''
+      and coalesce(auth.role(), '') = ''
+      and auth.uid() is null
+    );
+$$;
+
+comment on function public.contexto_servidor() is
+  'true solo para service_role, SQL Editor/psql o conexiones internas. anon y authenticated devuelven false.';
+
+revoke execute on function public.contexto_servidor() from public, anon;
+grant execute on function public.contexto_servidor() to authenticated, service_role;
 
 -- ------------------------------------------------------------
 -- 1) Rastreo por número + fecha: sin auto-vínculo y sin PII ajena
@@ -115,24 +150,77 @@ grant execute on function public.vincular_guia_codigo(text) to authenticated;
 
 -- ------------------------------------------------------------
 -- 4) Trigger anti-suplantación
---    - Los clientes no pueden modificar guías directamente.
---    - La RPC anterior pone ae.vinculando_guia = 'on' solo dentro de su transacción.
---    - auth.uid() nulo = service_role / SQL Editor: se permite (tareas administrativas).
+--    - Los clientes no pueden crear, modificar ni borrar guías directamente.
+--    - La RPC anterior pone ae.vinculando_guia = 'on' solo dentro de su transacción,
+--      y únicamente se acepta si el único campo que cambió es cliente_id = auth.uid().
+--    - El personal conserva sus permisos; RLS sigue limitando las filas que ve/edita.
+--    - contexto_servidor() cubre service_role y el SQL Editor.
 -- ------------------------------------------------------------
 create or replace function public.proteger_guia_cliente() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare
+  v_rol text := coalesce(public.mi_rol(), '');
 begin
-  if auth.uid() is not null
-     and coalesce(public.mi_rol(), '') not in ('superadmin', 'admin', 'recepcion', 'logistica', 'chofer')
-     and coalesce(current_setting('ae.vinculando_guia', true), 'off') <> 'on' then
-    raise exception 'Los clientes no pueden modificar guías directamente';
+  if public.contexto_servidor() then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
   end if;
-  return new;
+
+  if tg_op = 'INSERT' then
+    if v_rol in ('superadmin', 'admin', 'recepcion', 'logistica') then
+      return new;
+    end if;
+    raise exception 'No tienes permiso para crear guías';
+  end if;
+
+  if tg_op = 'DELETE' then
+    if v_rol in ('superadmin', 'admin') then
+      return old;
+    end if;
+    raise exception 'No tienes permiso para eliminar guías';
+  end if;
+
+  -- UPDATE: única vía permitida a un cliente (vincular_guia_codigo).
+  -- Se exige que cliente_id pase a ser el propio usuario y que NINGÚN campo
+  -- sensible cambie; así una RPC futura no puede reutilizar la bandera para
+  -- alterar el dueño, el precio, el estado, la dirección ni el viaje.
+  if coalesce(current_setting('ae.vinculando_guia', true), 'off') = 'on'
+     and new.cliente_id is not distinct from auth.uid()
+     and new.id is not distinct from old.id
+     and new.numero is not distinct from old.numero
+     and new.recinto_id is not distinct from old.recinto_id
+     and new.remitente is not distinct from old.remitente
+     and new.destinatario is not distinct from old.destinatario
+     and new.telefono_destinatario is not distinct from old.telefono_destinatario
+     and new.direccion_entrega is not distinct from old.direccion_entrega
+     and new.lat is not distinct from old.lat
+     and new.lng is not distinct from old.lng
+     and new.cantidad_paquetes is not distinct from old.cantidad_paquetes
+     and new.peso_kg is not distinct from old.peso_kg
+     and new.costo is not distinct from old.costo
+     and new.pagada is not distinct from old.pagada
+     and new.estado is not distinct from old.estado
+     and new.fecha_recepcion is not distinct from old.fecha_recepcion
+     and new.viaje_id is not distinct from old.viaje_id
+     and new.orden_parada is not distinct from old.orden_parada
+     and new.entregada_at is not distinct from old.entregada_at
+     and new.codigo_rastreo is not distinct from old.codigo_rastreo
+     and new.created_at is not distinct from old.created_at then
+    return new;
+  end if;
+
+  if v_rol in ('superadmin', 'admin', 'recepcion', 'logistica', 'chofer') then
+    return new;
+  end if;
+
+  raise exception 'No tienes permiso para modificar guías';
 end $$;
 
 drop trigger if exists proteger_guia_cliente on public.guias;
 create trigger proteger_guia_cliente
-  before update on public.guias
+  before insert or update or delete on public.guias
   for each row execute function public.proteger_guia_cliente();
 
 -- ------------------------------------------------------------

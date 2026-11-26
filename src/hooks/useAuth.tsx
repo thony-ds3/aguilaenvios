@@ -61,6 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         let p = await leerPerfil(nueva.user.id);
         if (!activo) return;
+        if (!p) {
+          // Autorreparación (migración 011): si el trigger handle_new_user no llegó a
+          // crear el perfil, la RPC lo crea con los metadatos de Auth. Si la migración
+          // aún no está aplicada, se ignora y se mantiene el aviso de "sin perfil".
+          const { data: reparado, error: eReparar } = await supabase.rpc('reparar_mi_perfil');
+          if (!eReparar && reparado) p = reparado as unknown as Perfil;
+        }
+        if (!activo) return;
         if (!p || !p.activo) {
           setError(p ? 'Tu cuenta está desactivada. Contacta al administrador.' : 'Tu cuenta no tiene perfil asignado. Contacta al administrador.');
           setPerfil(null);
@@ -143,11 +151,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (e) throw new Error(traducirError(e));
     if (data.session && data.user) {
-      const { error: e2 } = await supabase
+      // Si handle_new_user no está instalado (o falló), reparar_mi_perfil crea la fila.
+      // Si la migración 011 todavía no está aplicada, se ignora el 404 y se intenta el update.
+      const { error: eReparar } = await supabase.rpc('reparar_mi_perfil');
+      if (eReparar && eReparar.code !== 'PGRST202') throw new Error(traducirError(eReparar));
+      const { data: actualizado, error: e2 } = await supabase
         .from('perfiles')
         .update({ nombres: datos.nombres, apellidos: datos.apellidos, telefono: datos.telefono || null })
-        .eq('id', data.user.id);
+        .eq('id', data.user.id)
+        .select('id');
       if (e2) throw new Error(traducirError(e2));
+      if (!actualizado || actualizado.length === 0) {
+        // Sin perfil todavía: useAuth mostrará el aviso y la RPC lo reparará al cargar.
+        console.warn('El perfil aún no existe; aplica 011_perfil_automatico.sql.');
+      }
     }
     return { requiereConfirmacion: !data.session };
   }, []);

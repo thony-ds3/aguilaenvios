@@ -53,9 +53,14 @@ function origenesPermitidos(): string[] {
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
-  // En desarrollo local se permite el puerto de Vite aunque no se configure nada.
-  const locales = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-  return [...new Set([...configurados, ...locales])];
+  // Orígenes conocidos: desarrollo local y la app publicada en Render.
+  // Se permiten siempre para que un secreto sin configurar no rompa el alta en producción.
+  const conocidos = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://aguilaenvios.onrender.com',
+  ];
+  return [...new Set([...configurados, ...conocidos])];
 }
 
 function cabecerasCors(origen: string | null): Record<string, string> {
@@ -275,7 +280,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     email: correo,
     password: clave,
     email_confirm: true,
-    user_metadata: { full_name: nombres, debe_cambiar_clave: true },
+    user_metadata: {
+      full_name: nombres,
+      apellidos,
+      telefono: telefono || null,
+      debe_cambiar_clave: true,
+    },
   });
   if (errorCrear || !creado.user) {
     const mensaje = errorCrear?.message ?? '';
@@ -285,12 +295,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return responder(400, { error: 'No se pudo crear la cuenta. Revisa el correo y la contraseña.' }, origen);
   }
 
-  // 7) Asignar nombre, teléfono, rol y recinto. Si falla, se borra la cuenta para no dejarla a medias.
-  const { error: errorActualizar } = await admin
+  // 7) Asignar nombre, teléfono, rol y recinto con UPSERT.
+  //    No basta un UPDATE: si handle_new_user no existe, el UPDATE afecta 0 filas y
+  //    PostgREST no devuelve error, dejando la cuenta huérfana. El upsert crea la fila
+  //    que falte y `.select('id')` verifica que realmente se escribió.
+  const { data: perfil, error: errorPerfilNuevo } = await admin
     .from('perfiles')
-    .update({ nombres, apellidos, telefono: telefono || null, rol, recinto_id: recintoId })
-    .eq('id', creado.user.id);
-  if (errorActualizar) {
+    .upsert(
+      {
+        id: creado.user.id,
+        nombres,
+        apellidos,
+        telefono: telefono || null,
+        rol,
+        recinto_id: recintoId,
+        activo: true,
+      },
+      { onConflict: 'id' },
+    )
+    .select('id')
+    .maybeSingle();
+  if (errorPerfilNuevo || !perfil) {
     await admin.auth.admin.deleteUser(creado.user.id);
     return responder(400, { error: 'No se pudo asignar el rol o el recinto. No se creó la cuenta.' }, origen);
   }
