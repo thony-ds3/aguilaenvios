@@ -122,7 +122,7 @@ export default function CrearCuentaPage() {
           etiqueta="Contraseña"
           type="password"
           autoComplete="new-password"
-          placeholder="Mínimo 8 caracteres"
+          placeholder="Mínimo 10 caracteres"
           ayuda="Mínimo 8 caracteres."
           error={errors.clave?.message}
           {...register('clave')}
