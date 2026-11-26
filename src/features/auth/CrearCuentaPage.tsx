@@ -123,7 +123,7 @@ export default function CrearCuentaPage() {
           type="password"
           autoComplete="new-password"
           placeholder="Mínimo 10 caracteres"
-          ayuda="Mínimo 8 caracteres."
+          ayuda="Mínimo 10 caracteres."
           error={errors.clave?.message}
           {...register('clave')}
         />
