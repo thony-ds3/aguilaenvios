@@ -111,7 +111,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const iniciarSesion = useCallback(async (correo: string, clave: string) => {
     setError(null);
     const { error: e } = await supabase.auth.signInWithPassword({ email: correo, password: clave });
-    if (e) throw new Error(traducirError(e));
+    if (e) {
+      // Se conserva el código para que el login distinga "correo sin confirmar".
+      const fallo = new Error(traducirError(e)) as Error & { code?: string };
+      fallo.code = e.code;
+      throw fallo;
+    }
   }, []);
 
   const iniciarConGoogle = useCallback(async () => {

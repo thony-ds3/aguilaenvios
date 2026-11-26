@@ -17,7 +17,7 @@ const loginSchema = z.object({
 type LoginValores = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { session, perfil, cargando, error: errorSesion, iniciarSesion } = useAuth();
+  const { session, perfil, cargando, error: errorSesion, iniciarSesion, reenviarConfirmacion } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -32,6 +32,10 @@ export default function LoginPage() {
   const [enviando, setEnviando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
   const [verClave, setVerClave] = useState(false);
+  // Correo que existe pero sigue sin confirmar: permite pedir otro enlace.
+  const [correoPendiente, setCorreoPendiente] = useState<string | null>(null);
+  const [reenviando, setReenviando] = useState(false);
+  const [avisoReenvio, setAvisoReenvio] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginValores>({
     resolver: zodResolver(loginSchema),
@@ -49,13 +53,31 @@ export default function LoginPage() {
 
   const onSubmit = async (valores: LoginValores) => {
     setErrorForm(null);
+    setAvisoReenvio(null);
+    setCorreoPendiente(null);
     setEnviando(true);
     try {
       await iniciarSesion(valores.correo, valores.clave);
     } catch (e) {
+      const codigo = (e as { code?: string }).code;
+      if (codigo === 'email_not_confirmed') setCorreoPendiente(valores.correo);
       setErrorForm(e instanceof Error ? e.message : 'No se pudo iniciar sesión.');
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const reenviar = async () => {
+    if (!correoPendiente) return;
+    setAvisoReenvio(null);
+    setReenviando(true);
+    try {
+      await reenviarConfirmacion(correoPendiente);
+      setAvisoReenvio('Te enviamos un correo nuevo. Revisa también la carpeta de spam.');
+    } catch (e) {
+      setErrorForm(e instanceof Error ? e.message : 'No se pudo reenviar el correo.');
+    } finally {
+      setReenviando(false);
     }
   };
 
@@ -114,6 +136,12 @@ export default function LoginPage() {
         <Boton type="submit" className="w-full" disabled={enviando}>
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </Boton>
+        {correoPendiente ? (
+          <Boton variante="secundaria" className="w-full" onClick={reenviar} disabled={reenviando}>
+            {reenviando ? 'Enviando…' : 'Reenviar correo de confirmación'}
+          </Boton>
+        ) : null}
+        {avisoReenvio ? <Alerta tipo="ok">{avisoReenvio}</Alerta> : null}
       </form>
 
       <Boton variante="fantasma" className="w-full" onClick={() => navigate('/cliente/rastreo')}>
