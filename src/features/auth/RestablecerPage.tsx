@@ -1,4 +1,4 @@
-// [FE] Restablecer contraseña: se abre desde el enlace del correo. Mínimo 8 caracteres.
+// [FE] Restablecer contraseña: se abre desde el enlace del correo. Mínimo 10 caracteres.
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -65,7 +65,7 @@ export default function RestablecerPage() {
           etiqueta="Nueva contraseña"
           type="password"
           autoComplete="new-password"
-          placeholder="Mínimo 8 caracteres"
+          placeholder="Mínimo 10 caracteres"
           error={errors.clave?.message}
           {...register('clave')}
         />

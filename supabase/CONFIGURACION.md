@@ -38,11 +38,18 @@ La app también exige letras y números y bloquea contraseñas comunes (ver `src
 La configuración del panel es la última barrera: debe coincidir con la del código.
 
 ### Direcciones permitidas
-Authentication > URL Configuration:
-- **Site URL**: la dirección pública de la app, por ejemplo `https://aguila-envios.vercel.app`.
-- **Redirect URLs**: `https://TU-DOMINIO/**` y, para desarrollo, `http://localhost:5173/**`.
+Authentication > URL Configuration. Para producción en Render:
 
-Sin esto, los enlaces de recuperar contraseña y el acceso con Google vuelven a una dirección equivocada.
+- **Site URL**: `https://aguilaenvios.onrender.com`
+- **Redirect URLs**:
+  - `https://aguilaenvios.onrender.com/**`
+  - `http://localhost:5173/**` (solo desarrollo)
+
+La app envía `emailRedirectTo` a `https://aguilaenvios.onrender.com/login?confirmado=1`, pero Supabase solo respeta esa dirección si el dominio está en **Redirect URLs**. Si falta, usa el **Site URL** y el enlace termina en otra pantalla o en `localhost`.
+
+El dominio se toma de `VITE_APP_URL` (en Render: `https://aguilaenvios.onrender.com`). Si la variable no existe, se usa el dominio desde el que se abrió la app.
+
+Sin esta configuración, los enlaces de confirmación y de recuperación de contraseña vuelven a una dirección equivocada.
 
 ### Google
 1. Google Cloud Console > APIs y servicios > Credenciales > Crear ID de cliente de OAuth (aplicación web).
@@ -80,7 +87,27 @@ Correo de confirmación de cuenta (Authentication > Emails > **Confirm signup**)
 <p><a href="{{ .ConfirmationURL }}">Confirmar mi correo</a></p>
 ```
 
-El servicio de correo incluido en Supabase permite muy pocos envíos por hora. Para uso real configura un SMTP propio en Authentication > Emails > SMTP Settings.
+El enlace del correo de confirmación vuelve a `https://aguilaenvios.onrender.com/login?confirmado=1`. La app detecta `confirmado=1` y muestra “¡Correo confirmado!”.
+
+### SMTP propio (necesario para el registro público)
+
+Con `mailer_autoconfirm = false`, cada alta envía un correo. El servidor **integrado** de Supabase tiene dos límites:
+
+- **2 correos por hora** para todo el proyecto.
+- **Solo envía a direcciones del equipo del proyecto** (las que aparecen en Organization > Team).
+
+Por eso, después de unas pocas cuentas, “Crear cuenta” falla con `over_email_send_rate_limit` o “Email address not authorized”. **No es un fallo de la app**: es el límite del correo integrado. La solución definitiva es un SMTP propio.
+
+1. Crea una cuenta en un proveedor transaccional (Resend, Brevo, SendGrid, Amazon SES) o usa Gmail con contraseña de aplicación.
+2. Authentication > Emails > **SMTP Settings** > *Enable custom SMTP*:
+   - **Resend**: host `smtp.resend.com`, puerto `465` (SSL) o `587` (STARTTLS), usuario `resend`, contraseña = API key, remitente = dominio verificado en Resend.
+   - **Brevo**: host `smtp-relay.brevo.com`, puerto `587`, usuario = el correo de la cuenta, contraseña = clave SMTP de Brevo.
+   - **Gmail**: host `smtp.gmail.com`, puerto `465`, usuario = la cuenta completa, contraseña = “contraseña de aplicación” (requiere verificación en dos pasos).
+3. **Sender email** debe pertenecer al dominio verificado en el proveedor (por ejemplo `no-reply@tudominio.com`).
+4. Usa **Send test email** y confirma que llega.
+5. Ajusta Authentication > **Rate Limits** > *Email sent* según tu proveedor.
+
+Alternativa rápida solo para pruebas: Authentication > Sign In / Providers > Email > desactivar **Confirm email** (`mailer_autoconfirm = true`). El registro funciona sin enviar correos, pero cualquiera puede crear cuentas sin verificar su dirección. No se recomienda en producción.
 
 ## 3. Edge Function `crear-usuario`
 
@@ -124,6 +151,7 @@ En Vercel, Netlify o Cloudflare Pages:
 | --- | --- |
 | `VITE_SUPABASE_URL` | `https://ifbexbcoujmdfgvryzfm.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | la clave `sb_publishable_...` |
+| `VITE_APP_URL` | `https://aguilaenvios.onrender.com` (sin barra final) |
 | `VITE_MODO_PRUEBA` | `false` en producción (solo se activa en `npm run dev`) |
 | `VITE_TILES_URL` | opcional: proveedor de mosaicos propio (MapTiler, Stadia…) |
 | `VITE_TILES_ATTRIBUTION` | atribución que exige ese proveedor |

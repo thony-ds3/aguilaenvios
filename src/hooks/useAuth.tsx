@@ -1,7 +1,7 @@
 // [FE→BE] Sesión de Supabase Auth + perfil (rol, recinto, activo) leído de la tabla `perfiles`.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase, supabaseConfigurado } from '@/lib/supabase';
+import { supabase, supabaseConfigurado, urlApp } from '@/lib/supabase';
 import { traducirError } from '@/lib/errores';
 import type { Perfil } from '@/lib/tipos';
 
@@ -22,6 +22,7 @@ interface AuthValor {
   iniciarSesion: (correo: string, clave: string) => Promise<void>;
   iniciarConGoogle: () => Promise<void>;
   crearCuenta: (datos: DatosRegistro) => Promise<{ requiereConfirmacion: boolean }>;
+  reenviarConfirmacion: (correo: string) => Promise<void>;
   recuperarClave: (correo: string) => Promise<void>;
   restablecerClave: (clave: string) => Promise<void>;
   cerrarSesion: () => Promise<void>;
@@ -116,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const iniciarConGoogle = useCallback(async () => {
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${urlApp()}/` },
     });
     if (e) throw new Error(traducirError(e));
   }, []);
@@ -131,7 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           apellidos: datos.apellidos,
           telefono: datos.telefono || null,
         },
-        emailRedirectTo: `${window.location.origin}/login`,
+        // Al confirmar el correo, Supabase vuelve a /login y la app muestra el aviso.
+        emailRedirectTo: `${urlApp()}/login?confirmado=1`,
       },
     });
     if (e) throw new Error(traducirError(e));
@@ -145,9 +147,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { requiereConfirmacion: !data.session };
   }, []);
 
+  // Si el correo no llegó (límite de envíos, spam o dirección no autorizada),
+  // la persona puede pedir otro desde la misma pantalla.
+  const reenviarConfirmacion = useCallback(async (correo: string) => {
+    const { error: e } = await supabase.auth.resend({
+      type: 'signup',
+      email: correo,
+      options: { emailRedirectTo: `${urlApp()}/login?confirmado=1` },
+    });
+    if (e) throw new Error(traducirError(e));
+  }, []);
+
   const recuperarClave = useCallback(async (correo: string) => {
     const { error: e } = await supabase.auth.resetPasswordForEmail(correo, {
-      redirectTo: `${window.location.origin}/restablecer-contrasena`,
+      redirectTo: `${urlApp()}/restablecer-contrasena`,
     });
     if (e) throw new Error(traducirError(e));
   }, []);
@@ -178,12 +191,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       iniciarSesion,
       iniciarConGoogle,
       crearCuenta,
+      reenviarConfirmacion,
       recuperarClave,
       restablecerClave,
       cerrarSesion,
       refrescarPerfil,
     }),
-    [session, perfil, cargando, error, iniciarSesion, iniciarConGoogle, crearCuenta, recuperarClave, restablecerClave, cerrarSesion, refrescarPerfil],
+    [session, perfil, cargando, error, iniciarSesion, iniciarConGoogle, crearCuenta, reenviarConfirmacion, recuperarClave, restablecerClave, cerrarSesion, refrescarPerfil],
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

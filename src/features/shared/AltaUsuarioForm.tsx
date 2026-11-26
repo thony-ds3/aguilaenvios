@@ -124,8 +124,8 @@ export function AltaUsuarioForm({
           etiqueta="Contraseña temporal"
           type="text"
           autoComplete="off"
-          placeholder="Mínimo 8 caracteres"
-          ayuda="Mínimo 8 caracteres. La persona puede cambiarla con Recuperar contraseña."
+          placeholder="Mínimo 10 caracteres"
+          ayuda="Mínimo 10 caracteres. La persona puede cambiarla con Recuperar contraseña."
           error={errors.clave?.message}
           {...register('clave')}
         />

@@ -1,5 +1,5 @@
-// [FE] Pantalla 2 · Crear cuenta: nombres y apellidos (solo letras), teléfono (solo números), correo y contraseña (mínimo 8)
-import { useState } from 'react';
+// [FE] Pantalla 2 · Crear cuenta: nombres y apellidos (solo letras), teléfono (solo números), correo y contraseña (mínimo 10)
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,11 +30,22 @@ const registroSchema = z
 type RegistroValores = z.infer<typeof registroSchema>;
 
 export default function CrearCuentaPage() {
-  const { crearCuenta } = useAuth();
+  const { crearCuenta, reenviarConfirmacion } = useAuth();
   const navigate = useNavigate();
   const [enviando, setEnviando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
   const [revisarCorreo, setRevisarCorreo] = useState(false);
+  const [correoPendiente, setCorreoPendiente] = useState('');
+  const [reenviando, setReenviando] = useState(false);
+  const [espera, setEspera] = useState(0);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  // Cuenta regresiva: evita pedir varios correos seguidos y chocar con el límite de Supabase.
+  useEffect(() => {
+    if (espera <= 0) return;
+    const temporizador = setTimeout(() => setEspera((s) => s - 1), 1000);
+    return () => clearTimeout(temporizador);
+  }, [espera]);
 
   const { control, register, handleSubmit, formState: { errors } } = useForm<RegistroValores>({
     resolver: zodResolver(registroSchema),
@@ -52,13 +63,32 @@ export default function CrearCuentaPage() {
         correo: v.correo,
         clave: v.clave,
       });
-      if (requiereConfirmacion) setRevisarCorreo(true);
-      else navigate('/', { replace: true });
+      if (requiereConfirmacion) {
+        setCorreoPendiente(v.correo);
+        setRevisarCorreo(true);
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (e) {
-      console.log(e);
       setErrorForm(e instanceof Error ? e.message : 'No se pudo crear la cuenta.');
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const reenviar = async () => {
+    if (!correoPendiente) return;
+    setErrorForm(null);
+    setAviso(null);
+    setReenviando(true);
+    try {
+      await reenviarConfirmacion(correoPendiente);
+      setAviso('Te enviamos otro correo de confirmación. Revisa también la carpeta de spam.');
+      setEspera(60);
+    } catch (e) {
+      setErrorForm(e instanceof Error ? e.message : 'No se pudo reenviar el correo.');
+    } finally {
+      setReenviando(false);
     }
   };
 
@@ -66,8 +96,18 @@ export default function CrearCuentaPage() {
     return (
       <MarcoAcceso titulo="Revisa tu correo" subtitulo="Tu cuenta casi está lista.">
         <Alerta tipo="ok">
-          Te enviamos un enlace para confirmar tu correo. Ábrelo y después podrás iniciar sesión.
+          Te enviamos un enlace de confirmación a <strong>{correoPendiente}</strong>. Ábrelo y después podrás iniciar
+          sesión.
         </Alerta>
+        <p className="text-sm text-ink-2">
+          Si no lo ves, revisa la carpeta de spam. El correo integrado de Supabase tarda y tiene un límite de 2 envíos
+          por hora.
+        </p>
+        {errorForm ? <Alerta tipo="error">{errorForm}</Alerta> : null}
+        {aviso ? <Alerta tipo="ok">{aviso}</Alerta> : null}
+        <Boton variante="fantasma" className="w-full" onClick={reenviar} disabled={reenviando || espera > 0}>
+          {reenviando ? 'Enviando…' : espera > 0 ? `Reenviar en ${espera} s` : 'Reenviar correo de confirmación'}
+        </Boton>
         <Link to="/login" className="inline-flex min-h-[52px] w-full items-center justify-center rounded-[14px] bg-brand px-5 font-bold text-white">
           Ir a iniciar sesión
         </Link>

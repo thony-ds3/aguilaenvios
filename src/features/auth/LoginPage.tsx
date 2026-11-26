@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { RUTA_INICIAL } from '@/theme/tokens';
 import { correoSchema } from '@/lib/validacion';
@@ -20,7 +20,14 @@ export default function LoginPage() {
   const { session, perfil, cargando, error: errorSesion, iniciarSesion } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [params] = useSearchParams();
   const destino = (location.state as { from?: string } | null)?.from;
+
+  // Enlace de confirmación del correo: Supabase vuelve a /login?confirmado=1.
+  // Si el enlace venció o ya se usó, agrega error_code en la URL.
+  const confirmado = params.get('confirmado') === '1';
+  const errorEnlace =
+    params.get('error_code') ?? new URLSearchParams(location.hash.replace(/^#/, '')).get('error_code');
 
   const [enviando, setEnviando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
@@ -33,10 +40,12 @@ export default function LoginPage() {
 
   // Si ya hay sesión válida, redirige a la pantalla de su rol (o a la que pidió antes de iniciar sesión)
   useEffect(() => {
+    // Tras confirmar el correo nos quedamos en el login para mostrar el aviso.
+    if (confirmado) return;
     if (!cargando && session && perfil) {
       navigate(destino && destino !== '/login' ? destino : RUTA_INICIAL[perfil.rol], { replace: true });
     }
-  }, [cargando, session, perfil, destino, navigate]);
+  }, [confirmado, cargando, session, perfil, destino, navigate]);
 
   const onSubmit = async (valores: LoginValores) => {
     setErrorForm(null);
@@ -44,7 +53,6 @@ export default function LoginPage() {
     try {
       await iniciarSesion(valores.correo, valores.clave);
     } catch (e) {
-      console.log(e);
       setErrorForm(e instanceof Error ? e.message : 'No se pudo iniciar sesión.');
     } finally {
       setEnviando(false);
@@ -53,9 +61,31 @@ export default function LoginPage() {
 
   const mensaje = errorForm ?? errorSesion;
 
+  // Supabase ya creó la sesión al abrir el enlace: se ofrece entrar directo,
+  // sin saltar de página automáticamente.
+  if (confirmado && !cargando && session && perfil) {
+    return (
+      <MarcoAcceso titulo="Correo confirmado" subtitulo="Tu cuenta está lista para usarse.">
+        <Alerta tipo="ok">Confirmamos tu correo y tu sesión ya está activa.</Alerta>
+        <Boton className="w-full" onClick={() => navigate(RUTA_INICIAL[perfil.rol], { replace: true })}>
+          Entrar a mi cuenta
+        </Boton>
+      </MarcoAcceso>
+    );
+  }
+
   return (
     <MarcoAcceso titulo="Iniciar sesión" subtitulo="Ingresa para seguir tus envíos o gestionar tu trabajo.">
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+        {confirmado && !errorEnlace ? (
+          <Alerta tipo="ok">¡Correo confirmado! Ya puedes iniciar sesión con tu contraseña.</Alerta>
+        ) : null}
+        {errorEnlace ? (
+          <Alerta tipo="error">
+            El enlace de confirmación ya expiró o fue usado. Si tu correo ya está confirmado, inicia sesión; si no,
+            pide otro correo desde “Crear cuenta”.
+          </Alerta>
+        ) : null}
         {mensaje ? <Alerta tipo="error">{mensaje}</Alerta> : null}
         <Campo
           etiqueta="Correo electrónico"
