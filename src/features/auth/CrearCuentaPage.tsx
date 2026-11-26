@@ -55,6 +55,7 @@ export default function CrearCuentaPage() {
       if (requiereConfirmacion) setRevisarCorreo(true);
       else navigate('/', { replace: true });
     } catch (e) {
+      console.log(e);
       setErrorForm(e instanceof Error ? e.message : 'No se pudo crear la cuenta.');
     } finally {
       setEnviando(false);
